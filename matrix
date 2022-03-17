@@ -1,0 +1,384 @@
+############################
+# Function: Matrix
+# Author: Isaac Grossberg
+# Date: 1-15-2019
+############################
+
+#!/bin/bash
+
+#Set up data path for referencing arguments
+datafilepath="datafile$$"
+#Remove datafiles in case of exit
+trap "rm -f "datafile*"" EXIT
+#Change data path based on number of arguments
+if [ "$#" = "1" ]
+then
+	cat > "$datafilepath"
+elif [ "$#" = "2" ]
+then
+	datafilepath=$2
+fi
+
+
+############################
+#Name: Dims
+#Input: MxN Matrix
+#Output: "MxN"
+############################
+dims() {
+
+#Confirm valid number of inputs
+if [ $# -gt 1 ]
+then
+	echo "Invalid number of arguments" 1>&2
+	exit -1
+fi
+
+#Confirm readable file
+if [[ -r "$datafilepath" ]]
+then
+
+columns=0
+rows=0
+
+#Loop through rows of matrix
+while read myLine
+do
+	columns=0
+	#Loop through columns of matrix
+	for i in $myLine
+	do
+		columns=$(( $columns + 1)) #Increment # columns
+	done
+	rows=$(( $rows + 1)) #Increment # rows
+done < $datafilepath
+echo "$rows $columns"
+exit 0
+
+else
+	echo "Invalid file" 1>&2
+	exit -1
+fi
+}
+
+
+############################
+#Name: Transpose
+#Input: MxN Matrix
+#Output: Reflect elements along diagonal MxN -> NxM
+############################
+transpose() {
+
+#Confirm valid number of inputs
+if [ $# -gt 1 ]
+then
+	echo "Invalid number of arguments" 1>&2
+	exit -1
+fi
+
+#Confirm readable file
+if [[ ! -r "$datafilepath" ]]
+then
+	echo "Invalid file" 1>&2
+	exit -1
+fi
+
+#Copy-pasted dims function to find # of cols, rows
+columns=0
+rows=0
+while read myLine
+do
+	columns=0
+	#Loop through columns of matrix
+	for i in $myLine
+	do
+		columns=$(( $columns + 1)) #Increment # columns
+	done
+	rows=$(( $rows + 1)) #Increment # rows
+done < $datafilepath
+
+#Loop through columns of matrix
+i=1
+while test $i -ne $(( $columns + 1))
+do	
+	colPos=$i
+	#Cut out column of matrix, replace newlines with tabs
+	tempVar=$(cut -f $colPos $datafilepath | tr '\n' '\t')
+	tempVar=${tempVar%?} #Remove final tab
+	#Send out newly formed row, replace spaces with tabs
+	echo $tempVar | tr " " '\t'
+	i=$(( $i + 1)) #Increment i
+done
+
+exit 0
+
+}
+
+############################
+#Name: Mean
+#Input: MxN Matrix
+#Output: 1xN Matrix, each element is mean of respective column
+############################
+mean() {
+
+#Confirm valid number of inputs
+if [ $# -gt 1 ]
+then
+	echo "Invalid number of arguments" 1>&2
+	exit -1
+fi
+
+#Confirm readable file
+if [[ ! -r "$datafilepath" ]]
+then
+	echo "Invalid file" 1>&2
+	exit -1
+fi
+
+#Copy-pasted dims function to find # of cols, rows
+columns=0
+rows=0
+while read myLine
+do
+	columns=0
+	#Loop through columns of matrix
+	for i in $myLine
+	do
+		columns=$(( $columns + 1)) #Increment # columns
+	done
+	rows=$(( $rows + 1)) #Increment # rows
+done < $datafilepath
+
+tempFileV="tempFileV"
+> $tempFileV
+
+#Loop through columns of matrix
+i=1
+while test $i -ne $(( $columns + 1))
+do	
+	#Cut out column of matrix, replace newlines with +'s
+	tempVar=$(cut -f $i $datafilepath | tr '\n' '\+')
+	#Remove final +
+	tempVar=${tempVar%?}
+	#Divide by # of rows to calculate mean
+	tempVar=$((($tempVar+($rows/2) * (($tempVar>0) * 2-1))/$rows))
+	#Transform column to row
+	echo "$tempVar" | tr '\n' '\t' >>$tempFileV
+	#Grab first row of tempfile
+	tempVar=$(head -n 1 $tempFileV)
+	#Remove final + 
+	tempVar=${tempVar%?}
+	
+	#Only output on final loop
+	if test $i -eq $columns
+	then
+		echo $tempVar | tr " " '\t' #Transform spaces to tabs
+	fi
+	i=$(( $i + 1)) #Increment i
+done
+
+rm -f tempFileV
+exit 0
+}
+
+############################
+#Name: Add
+#Input: MxN matrix and MxN matrix
+#Output: Add 2 matrices element-wise MxN + MxN = MxN
+############################
+add() {
+
+#Confirm valid number of inputs
+if [ $# -gt 2 ]
+then
+	echo "Invalid number of arguments" 1>&2
+	exit -1
+fi
+
+#Confirm readable file
+if [[ ! -r "$1" ]]
+then
+	echo "Invalid file" 1>&2
+	exit -1
+fi
+
+if [[ ! -r "$2" ]]
+then
+	echo "Invalid file" 1>&2
+	exit -1
+fi
+
+#Copy-pasted dims function to get both matrix dimensions
+c1=0
+r1=0
+while read myLine
+do
+	c1=0
+	#Loop through columns of matrix
+	for i in $myLine
+	do
+		c1=$(( $c1 + 1)) #Increment # columns
+	done
+	r1=$(( $r1 + 1)) #Increment # rows
+done < $1
+
+c2=0
+r2=0
+while read myLine
+do
+	c2=0
+	#Loop through columns of matrix
+	for i in $myLine
+	do
+		c2=$(( $c2 + 1)) #Increment # columns
+	done
+	r2=$(( $r2 + 1)) #Increment # rows
+done < $2
+
+#Test matrix compatibility
+if [ $c1 -ne $c2 ] || [ $r1 -ne $r2 ]
+then
+	echo "Incompatible matrix dimensions" 1>&2
+	exit -1
+fi
+
+tempFile="tempFile$$"
+tempFile2="tempFile2$$"
+
+#Turn each row of each matrix into an array
+while read -a mRow1 <&3 && read -a mRow2 <&4
+do
+	#Clear temp files
+	> $tempFile
+	> $tempFile2
+
+	#Add together arrays element-wise
+	i=0
+	while test $i -ne $c1
+	do
+		echo $(( ${mRow1[$i]} + ${mRow2[$i]} )) >> $tempFile
+		i=$(( $i + 1 ))
+	done
+	
+	#Convert formatting
+	cat $tempFile | tr '\n' '\t' >> $tempFile2
+	truncate -s-1 $tempFile2
+
+	cat $tempFile2
+	echo
+
+done 3<$1 4<$2
+
+rm -f tempFile*
+exit 0
+
+}
+
+
+############################
+#Name: Multiply
+#Input: MxN Matrix and NxP Matrix
+#Output: Multiply 2 matrices MxN * NxP = MxP
+############################
+multiply() {
+
+#Confirm valid number of inputs
+if [ $# -gt 2 ]
+then
+	echo "Invalid number of arguments" 1>&2
+	exit -1
+fi
+
+#Confirm readable file
+if [[ ! -r "$1" ]]
+then
+	echo "Invalid file" 1>&2
+	exit -1
+fi
+
+if [[ ! -r "$2" ]]
+then
+	echo "Invalid file" 1>&2
+	exit -1
+fi
+
+#Copy-pasted dims function to get both matrix dimensions
+c1=0
+r1=0
+while read myLine
+do
+	c1=0
+	#Loop through columns of matrix
+	for i in $myLine
+	do
+		c1=$(( $c1 + 1)) #Increment # columns
+	done
+	r1=$(( $r1 + 1)) #Increment # rows
+done < $1
+
+c2=0
+r2=0
+while read myLine
+do
+	c2=0
+	#Loop through columns of matrix
+	for i in $myLine
+	do
+		c2=$(( $c2 + 1)) #Increment # columns
+	done
+	r2=$(( $r2 + 1)) #Increment # rows
+done < $2
+
+#Test matrix compatibility
+if [ $c1 -ne $r2 ]
+then
+	echo "Incompatible matrix dimensions" 1>&2
+	exit -1
+fi
+
+tempFile="tempFile$$"
+tempFile2="tempFile2$$"
+
+#Loop through rows of matrix 1
+while read -a mRow1 <&3
+do
+	#Loop through columns of matrix 2 
+	j=1
+	> $tempFile2
+	while test $j -le $c2
+	do
+		#Convert column to row, then to array
+		tempVar=0
+		tempVar=$(cut -f $j <$2 | tr '\n' '\t')
+		tempVar=${tempVar%?}
+		echo $tempVar >$tempFile
+		read -a mCol2 <$tempFile
+	
+		#Compute dot product of arrays
+		i=0
+		tempVar2=0
+		while test $i -ne $r2
+		do	
+			tempVar2=$(( $tempVar2 + ${mRow1[$i]}*${mCol2[$i]} ))
+			i=$(( $i + 1 ))
+		done
+
+		#Format and send to file
+		echo $tempVar2 | tr '\n' '\t' >> $tempFile2
+		j=$(( $j + 1 ))
+	done
+	
+	#More formatting and send to stdout
+	truncate -s-1 $tempFile2
+	cat $tempFile2
+	echo
+done 3<$1
+
+rm -f tempFile*
+exit 0
+
+}
+
+#Calls the function named by argument 1
+#and passes the remaining arguments to it
+$1 "${@:2}"
